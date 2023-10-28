@@ -1,0 +1,801 @@
+Imports TPVTAWEB.BDCnxADO   'Importa el Módulo para trabajar con las Bases de Datos
+Imports TPVTAWEB.Tbla       'Importa el Módulo para trabajar con las Tablas
+
+Public Class PVCCDet
+    Inherits System.Web.UI.Page
+
+    Friend TblaTxtMultValenArray(,) As String
+    Friend TblaArrFilTot As Integer = 0
+    Friend TblaArrColTot As Integer = 0
+
+    Protected Sub Page_Load(ByVal sender As Object, ByVal e As System.EventArgs) Handles Me.Load
+        NomDataTble = "DTSQL"
+        Dim Fil As Integer
+        'Dim Col As Integer
+        Dim MyStringBuilder As New StringBuilder
+
+        'Toma los datos del Querystring y los carga en las variables
+        Dim QKeys, QVal As Integer
+        Dim KeysVal(), DatVal() As String
+        Dim TblCod As String = ""
+        Dim ProAlm As String = ""
+        Dim VarPar As String = ""
+        Dim VarParAcum As String = ""
+        Dim DatQStrin As NameValueCollection
+        Dim DtRFilAct() As DataRow
+        Dim DtRIFilAct() As DataRow
+        Dim TblRelac As String
+        Dim TblTitulo As String = ""
+        Dim TblTitVinculo As String = ""
+        Dim TblOrden As String = Nothing
+        Dim TablaAsig As String = "Table01"
+        Dim TipoInforme As String = "TABLA"
+        Dim VarParVinc As String = ""
+
+        'Carga la info del querystring en la variable NameValueCollection DatQStrin.
+        DatQStrin = Request.QueryString
+        ' Pone todas las Claves en un array String.
+        KeysVal = DatQStrin.AllKeys
+        For QKeys = 0 To KeysVal.GetUpperBound(0)
+            'Response.Write("Key: " & Server.HtmlEncode(KeysVal(QKeys)))
+            ' Get all values under this key.
+            DatVal = DatQStrin.GetValues(QKeys)
+            For QVal = 0 To DatVal.GetUpperBound(0)
+                'Response.Write(CStr(QVal) & " = " & Server.HtmlEncode(DatVal(QVal)) & "<br>")
+                If Server.HtmlEncode(KeysVal(QKeys)) = "TblCod" Then
+                    TblCod = Server.HtmlEncode(DatVal(QVal))
+                ElseIf Server.HtmlEncode(KeysVal(QKeys)) = "TblPars" Then
+                    If VarPar = "" Then
+                        If InStr(1, Server.HtmlEncode(DatVal(QVal)), "USUNAME", CompareMethod.Text) > 0 Then
+                            VarPar = Server.HtmlEncode(DatVal(QVal))
+                            VarPar = VarPar.Replace("USUNAME", Page.User.Identity.Name.ToString())
+                        Else
+                            VarPar = Server.HtmlEncode(DatVal(QVal))
+                            If VarParAcum = "" Then
+                                VarParAcum = VarPar
+                            Else
+                                VarParAcum = VarParAcum & "|" & VarPar
+                            End If
+
+                        End If
+                    Else
+                        VarPar = VarPar & "|"
+                    End If
+                ElseIf Server.HtmlEncode(KeysVal(QKeys)) = "TblTit" Then
+                    TblTitulo = Server.HtmlEncode(DatVal(QVal))
+                End If
+            Next QVal
+        Next QKeys
+
+        'Verifica si es la primera vez que se abre el formulario
+        If Not Page.IsPostBack Then
+
+            '************************************************** INICIO **********************************************************
+            '<<<<<<<< Procedimiento para conectarse y Ejecutar consultas >>>>>>>>>>>>>
+            Rtado = ADOCnxBD("PVTWEB")             'Llama a la funcion para conectar a la BD, de la hoja BDCnxADO
+            'MyStringBuilder.Append(Rtado & "<br>")      'Escribe si se conecto OK o NO
+
+            '1.- Toma la información de la base de datos para armar el informe
+            Rtado = SqlBD("[PVTWEB].[dbo].[GRL_INFME]", TblCod, NomDataTble, "PVTWEB", "DataReader")
+
+            If Left(Rtado, 6) = "SqlErr" Then
+                Response.Write(Rtado)
+                Exit Sub
+            End If
+
+            'Toma los datos de la BD y luego los asigna al DataRow
+            DtRIFilAct = dbDTable.Select(Nothing, "[GRLM013_INFORD] ASC", DataViewRowState.CurrentRows)
+            TblRelac = ""
+            Dim filinf As Integer
+
+            ' Ahora recorremos el recordset para ejecutar una o varias tablas / graficos por informe 
+            For filinf = 0 To DtRIFilAct.Length - 1
+                'Define la tabla que se va a realizar
+                TblCod = DtRIFilAct(filinf)(1).ToString
+
+                'Define la tabla de asp que se utilizará
+                If DtRIFilAct(filinf)(2).ToString <> "" Then
+                    TablaAsig = DtRIFilAct(filinf)(2).ToString
+                End If
+
+                'Determina los parámetros para abrir la tabla
+                If DtRIFilAct(filinf)(3).ToString <> "" Then
+                    VarParAcum = DtRIFilAct(filinf)(3).ToString
+                    VarParAcum = VarParAcum.Replace("USUNAME", Page.User.Identity.Name.ToString())
+                    VarPar = VarParAcum
+                End If
+
+                'Determina el Título de la tabla
+                If DtRIFilAct(filinf)(4).ToString <> "" Then
+                    If InStr(1, DtRIFilAct(filinf)(3).ToString, "USUNAME", CompareMethod.Text) > 0 Then
+                        TblTitulo = DtRIFilAct(filinf)(4).ToString & " - " & Page.User.Identity.Name.ToString()
+                    Else
+                        TblTitulo = DtRIFilAct(filinf)(4).ToString
+                    End If
+                Else
+                    TblTitulo = ""
+                End If
+
+                '###########################################################################################3
+                '1.- Toma la información de la base de datos para armar la tabla
+                Rtado = SqlBD("[PVTWEB].[dbo].[GRL_TBLARM]", TblCod, NomDataTble, "PVTWEB", "DataReader")
+                'Rtado = SqlBD("[PVTWEB].[dbo].[GRL_INFME]", VarParAcum, NomDataTble, "PVTWEB", "DataReader")
+
+                If Left(Rtado, 6) = "SqlErr" Then
+                    Response.Write(Rtado)
+                    Exit Sub
+                End If
+
+
+                'Toma los datos de la BD y luego los asigna al DataRow
+                DtRFilAct = dbDTable.Select(Nothing, Nothing, DataViewRowState.CurrentRows)
+                TblRelac = ""
+                ' Ahora recorremos el recordset creando una fila nueva por cada registro 
+                For Fil = 0 To DtRFilAct.Length - 1
+                    If DtRFilAct(Fil)(0).ToString = "TBLDATOS" Then
+                        'Se carga en la variable el Proc Alm que dará origen a la tabla inicial
+                        ProAlm = DtRFilAct(Fil)(1).ToString
+                    ElseIf DtRFilAct(Fil)(0).ToString = "TBLVINCULA" Then
+                        'Se carga en la variable TblRelac, los datos que servirán para el vinculo con otra tabla
+                        If TblRelac = "" Then
+                            'TblRelac = DtRFilAct(Fil)("CPA_CRITAPLIC").ToString & "‡PVCCGen.aspx?TblCod=" & DtRFilAct(Fil)("COD_PROCALM").ToString & "&TblPars="
+                            TblRelac = DtRFilAct(Fil)("COD_PROCALM").ToString
+                        Else
+                            TblRelac = TblRelac & "/" & DtRFilAct(Fil)("CPA_CRITAPLIC").ToString & "‡PVCCGen.aspx?TblCod=" & DtRFilAct(Fil)("COD_PROCALM").ToString & "&TblPars="
+                        End If
+                    ElseIf DtRFilAct(Fil)(0).ToString = "TBLFORMCSS" Then
+                        'Se carga la información para definir el formato de la tabla
+                    ElseIf DtRFilAct(Fil)(0).ToString = "TBLORDEN" Then
+                        'Se carga la información para ordenar la tabla
+                        TblOrden = DtRFilAct(Fil)(1).ToString
+                    ElseIf DtRFilAct(Fil)(0).ToString = "TBLTIPO" Then
+                        TipoInforme = DtRFilAct(Fil)(1).ToString
+                    End If
+                Next Fil
+
+                '2.- La conexión, lectura de los datos y su traslado a la Tabla se hace en la función. 'Realiza una consulta a la BD, genera un dataset
+                If VarParVinc = "" Then
+                    VarParVinc = FuncVarPar(VarPar)
+                End If
+                Rtado = SqlBD(ProAlm, VarParVinc, NomDataTble, "PVTWEB", "DataReader")
+                'MyStringBuilder.Append(Rtado & "<br />")        'Escribe si se realizo la consulta OK o NO, si funcionó la funcion.
+
+                If Left(Rtado, 6) = "SqlErr" Then
+                    Response.Write(Rtado)
+                    Exit Sub
+                End If
+
+                If TipoInforme = "TABLA" Then
+                    '3.- Tomo las filas en la variable = FilasActuales como DataRow
+                    Panel1.Controls.Add(New LiteralControl("<div class='MargAnt'>"))
+                    Rtado = HaceTbla(dbDTable.Select(Nothing, TblOrden, DataViewRowState.CurrentRows), TblRelac, TblTitulo, TblTitVinculo, VarPar, TablaAsig)
+                    'Response.Write(Rtado)
+                    Panel1.Controls.Add(New LiteralControl("</div>"))
+                ElseIf TipoInforme = "FORMULARIO" Then
+                    Rtado = HaceForm(dbDTable.Select(Nothing, TblOrden, DataViewRowState.CurrentRows), TblRelac, TblTitulo, TblTitVinculo)
+                End If
+            Next filinf
+
+            ''<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< FIN >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+        Else
+            '************************************************** INICIO **********************************************************
+            'Response.Write(VarPar1)
+            '<<<<<<<< Procedimiento para conectarse y Ejecutar consultas >>>>>>>>>>>>>
+            Rtado = ADOCnxBD("PVTWEB")             'Llama a la funcion para conectar a la BD, de la hoja BDCnxADO
+            'MyStringBuilder.Append(Rtado & "<br>")      'Escribe si se conecto OK o NO
+
+            '1.- Toma la información de la base de datos para armar la tabla
+            Rtado = SqlBD("[PVTWEB].[dbo].[GRL_TBLARM]", TblCod, NomDataTble, "PVTWEB", "DataReader")
+
+            If Left(Rtado, 6) = "SqlErr" Then
+                Response.Write(Rtado)
+                Exit Sub
+            End If
+            'ProAlm = ""
+            'VarPar = ""
+            'TblRelac = ""
+
+            DtRFilAct = dbDTable.Select(Nothing, Nothing, DataViewRowState.CurrentRows)
+            TblRelac = ""
+            ' Ahora recorremos el recordset creando una fila nueva por cada registro 
+            For Fil = 0 To DtRFilAct.Length - 1
+                If DtRFilAct(Fil)(0).ToString = "TBLDATOS" Then
+                    'Se carga en la variable el Proc Alm que dará origen a la tabla inicial
+                    ProAlm = DtRFilAct(Fil)(1).ToString
+                ElseIf DtRFilAct(Fil)(0).ToString = "TBLVINCULA" Then
+                    'Se carga en la variable TblRelac, los datos que servirán para el vinculo con otra tabla
+                    'TblRelac = "PVCCGen.aspx?TblCod=" & DtRFilAct(Fil)(1).ToString & "&TblPars="
+                    'Se carga en la variable TblRelac, los datos que servirán para el vinculo con otra tabla
+                    If TblRelac = "" Then
+                        'TblRelac = DtRFilAct(Fil)("CPA_CRITAPLIC").ToString & "‡PVCCGen.aspx?TblCod=" & DtRFilAct(Fil)("COD_PROCALM").ToString & "&TblPars="
+                        TblRelac = DtRFilAct(Fil)("COD_PROCALM").ToString
+                    Else
+                        TblRelac = TblRelac & "/" & DtRFilAct(Fil)("CPA_CRITAPLIC").ToString & "‡PVCCGen.aspx?TblCod=" & DtRFilAct(Fil)("COD_PROCALM").ToString & "&TblPars="
+                    End If
+                ElseIf DtRFilAct(Fil)(0).ToString = "TBLFORMCSS" Then
+                    'Se carga la información para definir el formato de la tabla
+                ElseIf DtRFilAct(Fil)(0).ToString = "TBLORDEN" Then
+                    'Se carga la información para ordenar la tabla
+                    TblOrden = DtRFilAct(Fil)(1).ToString
+                ElseIf DtRFilAct(Fil)(0).ToString = "TBLTIPO" Then
+                    'Se carga el tipo de Tabla / Formulario
+                    TipoInforme = DtRFilAct(Fil)(1).ToString
+                End If
+            Next Fil
+
+
+            '1.- La conexión, lectura de los datos y su traslado a la Tabla se hace en la función.
+            If VarParVinc = "" Then
+                VarParVinc = FuncVarPar(VarPar)
+            End If
+            Rtado = SqlBD(ProAlm, VarParVinc, NomDataTble, "PVTWEB", "DataReader")
+            If Left(Rtado, 6) = "SqlErr" Then
+                Response.Write(Rtado)
+                Exit Sub
+            End If
+
+            '2.- Llama a la variable para hacer la tabla
+            Rtado = HaceTbla(dbDTable.Select(Nothing, TblOrden, DataViewRowState.CurrentRows), TblRelac, TblTitulo, VarPar)    ' 
+            'Response.Write(Rtado)
+            If Left(Rtado, 6) = "SqlErr" Then
+                Response.Write(Rtado)
+                Exit Sub
+            End If
+
+            '3.- Realiza la Tabla o el Formulario
+            If TipoInforme = "TABLA" Then
+                '3.- Tomo las filas en la variable = FilasActuales como DataRow
+                Rtado = HaceTbla(dbDTable.Select(Nothing, TblOrden, DataViewRowState.CurrentRows), TblRelac, TblTitulo, TblTitVinculo, VarPar, TablaAsig)
+                'Response.Write(Rtado)
+            ElseIf TipoInforme = "FORMULARIO" Then
+                Rtado = HaceForm(dbDTable.Select(Nothing, TblOrden, DataViewRowState.CurrentRows), TblRelac, TblTitulo, TblTitVinculo)
+            End If
+
+            'Tomo las filas en la variable = FilasActuales como DataRow => Dim DtRFilasActuales() As DataRow = dbDTable.Select(Nothing, Nothing, DataViewRowState.CurrentRows)
+            'Los datos Ya estan en el DataRow, ahora hay que navegar por ellos para agregar los atributos
+            'Para hacer esto llamo a la función. En el punto 2.- se consolido todo en que llama a la función y pasa como parámetros el contenido de la tabla
+            '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< FIN >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+        End If
+    End Sub
+
+    Friend Function HaceForm(ByVal DtRFilasActuales() As DataRow, ByVal Vinculo As String, Optional ByVal TblTitulo As String = "", Optional ByVal TblTituloVinculo As String = "") As String      'Se definen 1 parámetros, Nombre Base de Datos y Consulta Inicial
+        Dim Fil As Integer = 0 : Dim TotFil As Integer = 0
+        Dim Col As Integer = 0 : Dim TotCol As Integer = 0
+        Dim FilArr As Integer = 0 : Dim ColArr As Integer = 0
+        TotFil = dbDTable.Rows.Count - 1 : TotCol = dbDTable.Columns.Count - 1
+
+        ' 1.- Primero debemos poner el título al Formulario
+        Dim TitLabel As New Label()
+        Dim TitLinkButt As New LinkButton()
+        If TblTitulo <> "" Then
+            If TblTituloVinculo = "" Then
+                TitLabel.Text = TblTitulo
+                TitLabel.CssClass = "caption"
+                Panel1.Controls.Add(TitLabel)
+            Else
+                TitLinkButt.Text = TblTitulo.ToString
+                'TitLinkButt.PostBackUrl = TblTituloVinculo & "&TblPars=" & VarPar & "&TblTit=" & TblTitulo.ToString & " - COMPLETO"
+                TitLinkButt.CssClass = "caption"
+                Panel1.Controls.Add(TitLinkButt)
+            End If
+        Else
+            'Tbl.Caption = ""
+        End If
+
+        If TotFil >= 0 Then
+            Panel1.Controls.Add(New LiteralControl("<div class='MargAnt'>"))
+            Dim DatosMultiValuados() As String : Dim PrimerCampo As Boolean
+            PrimerCampo = True
+            For Col = 0 To dbDTable.Columns.Count - 1
+                DatosMultiValuados = dbDTable.Columns(Col).Caption.ToString.Split("†")
+                Dim lblCmpo As New Label()
+                Dim lblDat As New Label()
+                'Codigo = NM†, significa que el campo no se debe mostrar
+                'Codigo = NO†, significa que el campo no se debe ordenar
+                'Codigo = br†, significa que luego de mostrar el campo hace un salto de página
+                If (dbDTable.Columns(Col).Caption.ToString <> "TIPOFILA" And InStr(dbDTable.Columns(Col).Caption.ToString, "NM†", CompareMethod.Text) = 0) And (DtRFilasActuales(0)(Col).ToString() <> "NM") Then
+                    'Si tiene un br, retorno de carro lo aplica <br />
+                    If InStr(dbDTable.Columns(Col).Caption.ToString, "br†", CompareMethod.Text) <> 0 Then
+                        'Si el campo especifica que hay retorno de carro lo coloca
+                        Panel1.Controls.Add(New LiteralControl("<br />"))
+                        lblCmpo.CssClass = "labelCap"
+                        'Si tiene una línea de división y retorno de carro lo aplica <hr />
+                    ElseIf InStr(dbDTable.Columns(Col).Caption.ToString, "hr†", CompareMethod.Text) <> 0 Then
+                        Panel1.Controls.Add(New LiteralControl("<hr />"))
+                        lblCmpo.CssClass = "labelCap"
+
+                    Else
+                        'Le agrega la tabulación para que no esten encimados
+                        If PrimerCampo = True Then
+                            lblCmpo.CssClass = "labelCap"
+                            PrimerCampo = False
+                        Else
+                            lblCmpo.CssClass = "labelCapTab"
+                        End If
+                    End If
+                    'Campo
+                    lblCmpo.Text = DatosMultiValuados(DatosMultiValuados.Length - 1)    'Coloca el ultimo valor que el nombre del campo
+                    Panel1.Controls.Add(lblCmpo)
+                    'Datos
+                    lblDat.Text = DtRFilasActuales(0)(Col).ToString()
+                    lblDat.CssClass = "labelCont"
+                    Panel1.Controls.Add(lblDat)
+                End If
+            Next Col
+            Panel1.Controls.Add(New LiteralControl("</div>"))
+        End If
+        
+        'Si llega a esta instancia es que realizo la TABLA OK, lo informa
+        HaceForm = "TblaOK"
+        Return HaceForm
+    End Function
+
+    Friend Function HaceTbla(ByVal DtRFilasActuales() As DataRow, ByVal Vinculo As String, Optional ByVal TblTitulo As String = "", Optional ByVal TblTituloVinculo As String = "", Optional ByVal VarPar As String = "", Optional ByVal VarTblArmASP As String = "Table01") As String      'Se definen 1 parámetros, Nombre Base de Datos y Consulta Inicial
+        Dim ConvEnTblj As String
+        Dim DatosMultiValuados() As String
+        Dim Fil As Integer = 0 : Dim TotFil As Integer = 0
+        Dim Col As Integer = 0 : Dim TotCol As Integer = 0
+        Dim FilArr As Integer = 0 : Dim ColArr As Integer = 0
+        TotFil = dbDTable.Rows.Count - 1 : TotCol = dbDTable.Columns.Count - 1
+
+        Dim TblFormyVinc(TotFil, TotCol) As String
+
+        Dim Tbl As New Table
+        Tbl.ID = VarTblArmASP
+        Tbl.CssClass = "sortable"
+
+        Fil = dbDTable.Rows.Count
+        If Fil = 0 Then
+            HaceTbla = "TblaOK"
+            Return HaceTbla
+            Exit Function
+        End If
+        'Arma la Tabla que vee el usuario
+
+        ' 0.- Arma la tabla del campo multivaluado.
+        ' Organiza el formato y los vínculos de las tablas
+        ' Aquí llama a la función para transformar el campo multivaluado en una tabla
+        ConvEnTblj = ConvEnTbl(Vinculo)
+
+        ' 1.- Primero debemos poner el título a la Tabla
+        Dim TitLabel As New Label()
+        Dim TitLinkButt As New LinkButton()
+        If TblTitulo <> "" Then
+            If TblTituloVinculo = "" Then
+                TitLabel.Text = TblTitulo
+                TitLabel.CssClass = "caption"
+                Panel1.Controls.Add(TitLabel)
+            Else
+                TitLinkButt.Text = TblTitulo.ToString
+                TitLinkButt.PostBackUrl = TblTituloVinculo & "&TblPars=" & VarPar & "&TblTit=" & TblTitulo.ToString & " - COMPLETO"
+                TitLinkButt.CssClass = "caption"
+                Panel1.Controls.Add(TitLinkButt)
+            End If
+        Else
+            'Tbl.Caption = ""
+        End If
+
+        'If TblTitulo <> "" Then
+        '    Tbl.Caption = TblTitulo
+        '    Tbl.CaptionAlign = TableCaptionAlign.Left
+        'Else
+        '    Tbl.Caption = ""
+        'End If
+
+        ' 2.- Segundo debemos poner el título a cada columna
+        Dim Tit As New TableRow()
+        't.CssClass = "tbletit"
+
+        For Col = 0 To dbDTable.Columns.Count - 1
+            DatosMultiValuados = dbDTable.Columns(Col).Caption.ToString.Split("†")
+            Dim ct As New TableCell()
+            Dim cth As New TableHeaderCell()
+            Dim lbl As New Label()
+            'Si la columna define el tipo de Fila, o Se especifica que no se muestra, no la carga
+            If dbDTable.Columns(Col).Caption.ToString <> "TIPOFILA" And InStr(dbDTable.Columns(Col).Caption.ToString, "NM†", CompareMethod.Text) = 0 Then
+
+                lbl.Text = DatosMultiValuados(DatosMultiValuados.Length - 1)    'Coloca el ultimo valor que el nombre del campo
+                'Si el campo contiene NO†, quiere decir que no se debe ordenar y esa es la CssClass
+                If InStr(dbDTable.Columns(Col).Caption.ToString, "NO†", CompareMethod.Text) <> 0 Then
+                    cth.CssClass = "unsortable"
+                End If
+
+                'Verifica si esa columna tiene especificado el ancho
+                If InStr(dbDTable.Columns(Col).Caption.ToString, "WD†", CompareMethod.Text) <> 0 Then
+                    'Busca dentro del campo el valor que tiene el dato del ancho
+                    For I = 0 To DatosMultiValuados.Length - 1
+                        If InStr(DatosMultiValuados(I).ToString, "WD", CompareMethod.Text) <> 0 Then
+                            cth.Width = Mid(DatosMultiValuados(I).ToString, 1, Len(DatosMultiValuados(I).ToString) - 2)
+                        End If
+                    Next I
+                End If
+
+                cth.Controls.Add(lbl)
+                Tit.Cells.Add(cth)
+            End If
+        Next Col
+        Tbl.Rows.Add(Tit)
+
+
+        ' 3.- Tercero recorremos el recordset creando una fila nueva por cada registro 
+        For Fil = 0 To DtRFilasActuales.Length - 1
+            Dim r As New TableRow() 'Agrega una nueva Fila
+            ' Borrar Inicio
+            ' Especifica el formato de la fila
+            If DtRFilasActuales(Fil)(0).ToString = "TOTAL" Then
+                'Si la fila es un Total, tiene un formato específico
+                r.CssClass = "sortbottom"   'Especifica el formato de la fila Titulo
+                'Celda.CssClass = "tbleceltot"   'Especifica el formato de la fila Titulo
+            ElseIf DtRFilasActuales(Fil)(0).ToString = "DATOS" Then
+                'Si la fila es de Datos, tiene un formato específico
+                'r.CssClass = "TblDatEst"
+            End If
+
+
+            ' Borrar Fin
+            For Col = 0 To dbDTable.Columns.Count - 1
+                Dim Celda As New TableCell()
+                Dim LinkButt As New LinkButton()
+                Dim TextoAAgregar As String = ""
+                Dim TipoControl As String = ""
+                Dim TipoFormato As String = ""
+
+                'Si la columna define el tipo de Fila, o Se especifica que no se muestra, no la carga
+                If dbDTable.Columns(Col).Caption.ToString <> "TIPOFILA" And InStr(dbDTable.Columns(Col).Caption.ToString, "†NM", CompareMethod.Text) = 0 Then
+                    'Aquí estamos en cada celda de la tabla que se va a realizar
+                    If DtRFilasActuales(Fil)(0).ToString <> "NULL" Or DtRFilasActuales(Fil)(Col).ToString <> "" Then
+                        'Especifica el formato de la celda
+                        If DtRFilasActuales(Fil)(0).ToString = "TOTAL" Then
+                            'Si la fila es un Total, tiene un formato específico
+                            'Celda.CssClass = "sortbottom"   'Especifica el formato de la fila Titulo
+                            'Celda.CssClass = "tbleceltot"   'Especifica el formato de la fila Titulo
+                        ElseIf DtRFilasActuales(Fil)(0).ToString = "DATOS" Then
+                            'Si la fila es de Datos, tiene un formato específico
+                            'Celda.CssClass = "TblCelEst"
+                        End If
+
+
+
+                        'If DtRFilasActuales(Fil)(Col).ToString = "NULL" Or DtRFilasActuales(Fil)(Col).ToString = "" Then
+                        '    'NO HACE NADA
+                        'Else
+                        '    Celda.Controls.Add(New LiteralControl(DtRFilasActuales(Fil)(Col).ToString))
+                        'End If
+                        'ElseIf DtRFilasActuales(Fil)(0).ToString = "DATOS" Then
+
+
+
+                        'Ahora debemos recorrer el array para ver si tiene vinculo, formato, etc.
+                        'Aquí se debe verificar:
+                        ' Control a Utilizar
+                        ' Si tiene Vínculo
+                        ' Tipo de Formato del Valor
+                        ' Tipo de fondo de la celda
+                        ' Ver en excel que mas aspectos tiene la celda
+
+                        '1.- TIPO DE CONTROL QUE SE DEBE AGREGAR
+                        '    Recorre la matriz con la info
+                        For FilArr = 1 To TblaArrFilTot
+                            'Primero verifica si la fila esta incluída
+                            If Fil = TblaTxtMultValenArray(FilArr, 0) Or TblaTxtMultValenArray(FilArr, 0) = -1 Then     'FIL
+                                'Verifica si la columna esta incluída, si es así pone la especificación
+                                If Col = TblaTxtMultValenArray(FilArr, 1) Or TblaTxtMultValenArray(FilArr, 1) = -1 Then    'COL
+                                    'Verifica el tipo de columna, y en función de eso procede a tipificarla
+                                    If TblaTxtMultValenArray(FilArr, 2) = "CONTROL" Then    'TIPO
+                                        If TblaTxtMultValenArray(FilArr, 3) = "LINKBUTTON" Then   'VALOR
+                                            TipoControl = "LinkButton"
+                                            LinkButt.ID = "vinc" & Fil & Col
+
+                                            'Verifica si el vinculo que viene de la consulta sql tiene codigo y descripción
+                                            Dim DatVinc() As String
+                                            If DtRFilasActuales(Fil)(Col).ToString = "" Then
+                                                ReDim DatVinc(0)
+                                                DatVinc(0) = DtRFilasActuales(Fil)(Col).ToString
+                                            Else
+                                                DatVinc = DtRFilasActuales(Fil)(Col).ToString.Split("†")
+                                            End If
+
+                                            If DatVinc.Length = 3 Then  'Tiene 2 valores (0 y 1), tiene codigo
+                                                TextoAAgregar = DatVinc(2).ToString()
+                                                If VarPar = "" Then
+                                                    LinkButt.PostBackUrl = TblaTxtMultValenArray(FilArr, 4).ToString & "&TblPars=" & DatVinc(0).ToString() & "&TblTit=" & DatVinc(1).ToString()
+                                                    'TblRelac = "PVCCGen.aspx?TblCod=" & DtRFilAct(Fil)(1).ToString & "&TblPars="
+                                                Else
+                                                    LinkButt.PostBackUrl = TblaTxtMultValenArray(FilArr, 4).ToString & "&TblPars=" & VarPar & "|" & DatVinc(0).ToString() & "&TblTit=" & DatVinc(1).ToString()
+                                                    'LinkButt.PostBackUrl = TblaTxtMultValenArray(FilArr, 4).ToString & "&TblPars=" & VarPar & "|" & DatVinc(0).ToString() & "&TblTit=" & DatVinc(1).ToString()
+                                                End If
+                                            ElseIf DatVinc.Length = 2 Then  'Tiene 2 valores (0 y 1), tiene codigo
+                                                TextoAAgregar = DatVinc(1).ToString()
+                                                If VarPar = "" Then
+                                                    LinkButt.PostBackUrl = TblaTxtMultValenArray(FilArr, 4).ToString & "&TblPars=" & DatVinc(0).ToString() & "&TblTit=" & DatVinc(1).ToString()
+                                                    'TblRelac = "PVCCGen.aspx?TblCod=" & DtRFilAct(Fil)(1).ToString & "&TblPars="
+                                                Else
+                                                    LinkButt.PostBackUrl = TblaTxtMultValenArray(FilArr, 4).ToString & "&TblPars=" & VarPar & "|" & DatVinc(0).ToString() & "&TblTit=" & DatVinc(1).ToString()
+                                                End If
+                                            Else
+                                                TextoAAgregar = DatVinc(0).ToString()
+                                                If VarPar = "" Then
+                                                    LinkButt.PostBackUrl = TblaTxtMultValenArray(FilArr, 4).ToString & "&TblPars=" & DatVinc(0).ToString() & "&TblTit=" & DatVinc(0).ToString()
+                                                Else
+                                                    LinkButt.PostBackUrl = TblaTxtMultValenArray(FilArr, 4).ToString & "&TblPars=" & VarPar & "|" & DatVinc(0).ToString() & "&TblTit=" & DatVinc(0).ToString()
+                                                End If
+                                            End If
+                                        End If  'ESPECIFICACIONES
+                                    End If
+                                Else
+                                    'No hace nada, ya que puede ser que en otra fila de array este especificado
+                                End If
+                            Else
+                                'No hace nada, ya que puede ser que en otra fila de array este especificado
+                            End If
+                        Next
+
+                        '2.- FORMATO DEL VALOR A AGREGAR
+                        '    Recorre la matriz con la info
+                        For FilArr = 1 To TblaArrFilTot
+                            'Primero verifica si la fila esta incluída
+                            If Fil = TblaTxtMultValenArray(FilArr, 0) Or TblaTxtMultValenArray(FilArr, 0) = -1 Then     'FIL
+                                'Verifica si la columna esta incluída, si es así pone la especificación
+                                If Col = TblaTxtMultValenArray(FilArr, 1) Or TblaTxtMultValenArray(FilArr, 1) = -1 Then    'COL
+                                    'Celda que tiene un formato específico
+                                    'Verifica el tipo de columna, y en función de eso procede a tipificarla
+                                    If TblaTxtMultValenArray(FilArr, 2) = "FORMATO" Then    '
+                                        If TblaTxtMultValenArray(FilArr, 3) = "MONEDA" Then   'VALOR
+                                            If IsNumeric(DtRFilasActuales(Fil)(Col)) = True Then
+                                                Dim MyNum As Double = 0
+                                                If TextoAAgregar = "" Then
+                                                    MyNum = DtRFilasActuales(Fil)(Col)
+                                                    TextoAAgregar = MyNum.ToString("$#,##0;($#,##0);0")
+                                                    'TextoAAgregar = String.Format("{0,1:C0}", DtRFilasActuales(Fil)(Col))
+                                                Else
+                                                    MyNum = CDbl(TextoAAgregar)
+                                                    TextoAAgregar = MyNum.ToString("$#,##0;($#,##0);0")
+                                                    'TextoAAgregar = String.Format("{0,1:C0}", CDbl(TextoAAgregar))
+                                                End If
+                                                'Todos los valores numéricos se alinean a la derecha
+                                                Celda.HorizontalAlign = HorizontalAlign.Right
+                                            Else
+                                                'No hace nada ya que no se puede convertir el dato
+                                            End If
+                                        ElseIf TblaTxtMultValenArray(FilArr, 3) = "ENTERO" Then   'VALOR
+                                            If IsNumeric(DtRFilasActuales(Fil)(Col)) = True Then
+                                                Dim MyNum As Double = 0
+                                                If TextoAAgregar = "" Then
+                                                    MyNum = DtRFilasActuales(Fil)(Col)
+                                                    TextoAAgregar = MyNum.ToString("0' u';(0' u');0")
+                                                    'TextoAAgregar = String.Format("{0,1:C0}", DtRFilasActuales(Fil)(Col))
+                                                Else
+                                                    MyNum = CDbl(TextoAAgregar)
+                                                    TextoAAgregar = MyNum.ToString("0' u';(0' u');0")
+                                                End If
+                                                'Todos los valores numéricos se alinean a la derecha
+                                                Celda.HorizontalAlign = HorizontalAlign.Right
+                                            Else
+                                                'No hace nada ya que no se puede convertir el dato
+                                            End If
+                                        Else
+                                            'No hace nada
+                                        End If
+                                    End If
+                                Else
+                                    'No hace nada, ya que puede ser que en otra fila de array este especificado
+                                End If
+                            Else
+                                'No hace nada, ya que puede ser que en otra fila de array este especificado
+                            End If
+                        Next
+                        'Cuando termina el array, se deben ver los parámetros especificados, si no hay nada se ponen por defecto, TipoDato Texto, Formato, Fondo Celda, etc
+                        'Luego que recorrió por la tabla de especificaciones, agrega la Celda a la Tabla
+
+
+                        'Debe verificar el tipo de Control que se debe agregar, si no se agrega el texto comun
+                        If DtRFilasActuales(Fil)(Col).ToString = "" Or DtRFilasActuales(Fil)(Col).ToString = "0" Then
+                            'NO PONE NADA YA QUE NO TIENE VALOR
+                        Else
+                            If TextoAAgregar <> "" Then 'Si la variable con el dato con formato no tiene valor, pone el dato del DataTable
+                                If TextoAAgregar = "0" Then
+                                    'Si el valor es igual a cero no pone nada
+                                Else
+                                    If TipoControl = "LinkButton" Then
+                                        LinkButt.Text = TextoAAgregar
+                                        Celda.Controls.Add(LinkButt)
+                                    Else
+                                        Celda.Controls.Add(New LiteralControl(TextoAAgregar))
+                                    End If
+                                End If
+                            Else
+                                If TipoControl = "LinkButton" Then
+                                    LinkButt.Text = TextoAAgregar
+                                    Celda.Controls.Add(LinkButt)
+                                Else
+                                    Celda.Controls.Add(New LiteralControl(DtRFilasActuales(Fil)(Col).ToString))
+                                End If
+
+
+                            End If
+                        End If
+                    Else
+                        'NO HACE NADA
+                    End If
+                    'Response.Write("<TD><a href=detalle_rg.asp?Fecha="&Var_Fecha&"?Central="&oRS.Fields(I).name&"><div align=center><font size=2><font color=#0000A0>"&trim(oRS.Fields(I))&"</font></font></b></div></a></TD>")
+                    r.Cells.Add(Celda)
+                End If
+            Next Col
+
+            Tbl.Rows.Add(r)
+            'If Fil > 10 Then Exit For
+        Next Fil
+        Panel1.Controls.Add(Tbl)
+        Panel1.Controls.Add(New LiteralControl("<BR>"))
+
+        'Si llega a esta instancia es que realizo la TABLA OK, lo informa
+        HaceTbla = "TblaOK"
+        Return HaceTbla
+
+    End Function
+
+
+    Friend Function ConvEnTbl(ByVal TextMultValuado As String) As String
+        Dim Fil As Integer = 0
+        Dim Col As Integer = 0
+
+        'Pasa los datos en Filas
+        Dim DatosEnFilas() As String : DatosEnFilas = TextMultValuado.Split("‡") : Dim DatosEnFilasyCol() As String
+
+        'Redefine la matríz en función a los datos que hay en el campo multivaluado
+        TblaArrFilTot = DatosEnFilas.Length - 1 : TblaArrColTot = DatosEnFilas(0).Split("†").Length - 1
+        ReDim TblaTxtMultValenArray(TblaArrFilTot, TblaArrColTot)
+
+        'Completa el array con la información del campo multivaluado
+        For Fil = 0 To TblaArrFilTot
+            'Paso la primer fila a la variable de la fila
+            DatosEnFilasyCol = DatosEnFilas(Fil).Split("†")
+            For Col = 0 To TblaArrColTot
+                'Paso cada columna a la matriz. Ya aquí tengo fila y columna
+                TblaTxtMultValenArray(Fil, Col) = DatosEnFilasyCol(Col)
+            Next
+        Next
+
+        ConvEnTbl = "OK"
+        Return ConvEnTbl
+
+    End Function
+
+
+    Friend Function FuncVarPar(ByVal VarParAcum As String) As String
+        'VINCACUM†P5:VDA
+        Dim VarPar As String = ""
+        Dim VarParOrd() As String
+        Dim VarParNum() As String
+        Dim VPCant As Integer = 0
+        VarParOrd = VarParAcum.Split("|")
+        For VPCant = 0 To VarParOrd.Length - 1
+            VarParNum = VarParOrd(VPCant).Split(":")
+            Select Case VarParNum(0)
+                Case "P1"
+                    VarPar = VarParNum(1)
+                Case "P2"
+                    VarPar = VarPar & "|" & VarParNum(1)
+                Case "P3"
+                    VarPar = VarPar & "|" & VarParNum(1)
+                Case "P4"
+                    VarPar = VarPar & "|" & VarParNum(1)
+                Case "P5"
+                    VarPar = VarPar & "|" & VarParNum(1)
+                Case "P6"
+                    VarPar = VarPar & "|" & VarParNum(1)
+                Case "P7"
+                    VarPar = VarPar & "|" & VarParNum(1)
+                Case "P8"
+                    VarPar = VarPar & "|" & VarParNum(1)
+                Case "P9"
+                    VarPar = VarPar & "|" & VarParNum(1)
+                Case Else
+                    VarPar = VarParAcum
+            End Select
+        Next VPCant
+        FuncVarPar = VarPar
+    End Function
+
+
+    Friend Function FuncHaceVinc(ByVal VarParAcum As String, Optional VincAdic As String = "", Optional VincDat As String = "") As String
+        Dim VarPar As String = ""           'Variable para Armar el Vinculo definitivo
+        Dim VarParAcumSep() As String       'Variable para tomar los parámetros del VarParAcum
+        Dim VarParNum() As String           'Variable para separar los parámetro:Valor
+        Dim VPCant As Integer = 0           'Cantidad de parámetros
+
+        Dim VarParArm As String = ""        'Variable para armar el vinculo, desde los datos adic
+        Dim VarParCamb As Boolean = False   'Variable que determina si el parámetro fue cambiado
+        Dim VincAdicPar() As String         'Variable para tomar los parámetros que se deben cambiar
+        Dim VincAdicParNum() As String      'Variable para separa los parámetros:Valor
+        Dim VAPCant As Integer = 0          'Cantidad de parámetros adicionales
+        Dim VarParIncorp As Boolean = False        'Determina si el parámetro fue agregado
+
+        '1.- Aquí hay que recorrer la variable con los parámetros acumulados, luego que ingresamos a ese parámetro
+        'recorremos la variable de VincAdic para ver si ese parámetro hay que reemplazarlo y por que valor.
+
+        VarParAcumSep = VarParAcum.Split("|")
+        For VPCant = 0 To VarParAcumSep.Length - 1
+            VarParNum = VarParAcumSep(VPCant).Split(":")    'Separa cada parámetro en Parametro:Valor
+
+            VincAdicPar = VincAdic.Split(";")               'Separa los datos del Viculo Nuevo
+            VarParCamb = False
+            For VAPCant = 0 To VincAdicPar.Length - 1               'Recorre los parámetros adicionales
+                VincAdicParNum = VincAdicPar(VAPCant).Split(":")    'Separa cada parámetro en Parametro:Valor
+                If VarParNum(0) = VincAdicParNum(0) Then
+                    If VincAdicParNum(1) = "DA" Then
+                        VarParArm = VarParNum(0) & ":" & VincDat
+                    ElseIf VincAdicParNum(1) = "EL" Then
+                        ' SALTEA EL PARÁMETRO, NO LO INCORPORA VarParArm = VarParNum(0) & ":" & VincDat
+                    Else
+                        VarParArm = VarParNum(0) & ":" & VincAdicParNum(1)
+                    End If
+                    VarParCamb = True
+                End If
+            Next VAPCant
+
+            If VarParCamb = False Then      'Si el parámetro no es cambiado, deja el parámetro que tenía
+                VarParArm = VarParNum(0) & ":" & VarParNum(1)
+            End If
+
+            If VarPar = "" Then
+                VarPar = VarParArm
+            Else
+                VarPar = VarPar & "|" & VarParArm
+            End If
+        Next VPCant
+
+        '2.- Ahora hay que verificar si hay que agregar algún nuevo parámetro
+        'para ello debemos recorrer la matriz de parámetros a Adicionar, y si es un parámetro nuevo se lo agrega al final
+        VincAdicPar = VincAdic.Split(";")
+
+        For VAPCant = 0 To VincAdicPar.Length - 1               'Recorre los parámetros adicionales
+            VincAdicParNum = VincAdicPar(VAPCant).Split(":")    'Separa cada parámetro en Parametro:Valor
+            'Ahorra recorremos el VarPar que fue generado anteriormente
+            VarParIncorp = False
+            VarParAcumSep = VarParAcum.Split("|")
+            For VPCant = 0 To VarParAcumSep.Length - 1
+                VarParNum = VarParAcumSep(VPCant).Split(":")    'Separa cada parámetro en Parametro:Valor
+                If VarParNum(0) = VincAdicParNum(0) Then
+                    VarParIncorp = True
+                    Exit For
+                End If
+            Next VPCant
+            If VarParIncorp = False Then
+                If VincAdicParNum(1) = "DA" Then
+                    If VarPar = "" Then
+                        VarPar = VincAdicParNum(0) & ":" & VincDat
+                    Else
+                        VarPar = VarPar & "|" & VincAdicParNum(0) & ":" & VincDat
+                    End If
+                Else
+                    If VarPar = "" Then
+                        VarPar = VincAdicParNum(0) & ":" & VincAdicParNum(1)
+                    Else
+                        VarPar = VarPar & "|" & VincAdicParNum(0) & ":" & VincAdicParNum(1)
+                    End If
+
+                End If
+
+                VarParCamb = True
+            End If
+
+        Next VAPCant
+
+        '3.- Ahora hay que verificar si hay que renumerar los parámetros, ya que se pueden haber eliminado alguno
+        VarParAcumSep = VarPar.Split("|")
+        VarParArm = ""
+        For VPCant = 0 To VarParAcumSep.Length - 1
+            VarParNum = VarParAcumSep(VPCant).Split(":")    'Separa cada parámetro en Parametro:Valor
+            If VarParArm = "" Then
+                VarParArm = "P" & VPCant + 1 & ":" & VarParNum(1)
+            Else
+                VarParArm = VarParArm & "|" & "P" & VPCant + 1 & ":" & VarParNum(1)
+            End If
+        Next VPCant
+
+        FuncHaceVinc = VarParArm
+    End Function
+
+End Class
