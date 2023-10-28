@@ -6,4 +6,4 @@ First, I defined whether to make a data loading form or a dynamic table.
 Second, if it was a form, I built the fields, their validations and their logic based on the information received.
 If it was a table, I made it with the data, gave it the format, and generated the links to go to other pages and deepen the analysis.
 
-You can see an example of this code in the 
+You can see an example of this code in the PVCCDet and PVCCGen.
